@@ -1,0 +1,183 @@
+plugins {
+    // `java-library` 才有 api， `java` 只有 implementation
+    id 'java-library'
+}
+
+group = 'com.rover12421.okex'
+version = '5.0.1'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.jcraft:jsch:0.1.55'
+    implementation 'org.kohsuke:github-api:1.116'
+
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+
+
+    // Prometheus
+    implementation 'io.prometheus:simpleclient:0.6.0'
+    implementation 'io.prometheus:simpleclient_hotspot:0.6.0'
+    implementation 'io.prometheus:simpleclient_httpserver:0.6.0'
+    implementation 'io.prometheus:simpleclient_pushgateway:0.6.0'
+
+    // Micrometer
+    implementation 'io.micrometer:micrometer-core:1.5.1'
+
+    // Logging
+    api 'log4j:log4j:1.2.17'
+    api 'org.slf4j:slf4j-api:1.7.25'
+    api 'ch.qos.logback:logback-classic:1.2.3'
+
+    // Networking
+    implementation 'io.netty:netty-all:4.1.36.Final'
+    implementation 'com.squareup.okhttp3:okhttp:3.10.0'
+
+    // Retrofit
+    implementation 'com.squareup.retrofit2:retrofit:2.3.0'
+    implementation 'com.squareup.retrofit2:converter-scalars:2.3.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.3.0'
+    implementation 'com.squareup.retrofit2:adapter-rxjava:2.3.0'
+
+    // JSON
+    // 如果需要传递依赖，implementation 要改成 api
+    api 'com.alibaba:fastjson:1.2.62'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.5'
+    implementation 'commons-beanutils:commons-beanutils:1.9.3'
+    implementation 'net.sf.ezmorph:ezmorph:1.0.6'
+    implementation 'net.sf.json-lib:json-lib:2.2.3:jdk15'
+
+    // Commons
+    implementation 'org.apache.commons:commons-lang3:3.7'
+    implementation 'commons-collections:commons-collections:3.2.2'
+    implementation 'commons-codec:commons-codec:1.12'
+    implementation 'org.apache.commons:commons-compress:1.20'
+    implementation 'commons-lang:commons-lang:2.6'
+    implementation 'commons-logging:commons-logging:1.1.1'
+
+    // Database
+    implementation 'mysql:mysql-connector-java:5.1.38'
+
+    // Testing
+    testImplementation 'junit:junit:4.12'
+
+    // Spring
+    implementation 'org.springframework:spring-context:5.1.5.RELEASE'
+    implementation 'org.springframework:spring-web:5.0.9.RELEASE'
+
+    // Other
+    implementation 'com.google.guava:guava:27.1-jre'
+    implementation 'org.projectlombok:lombok:1.18.4'
+    implementation 'javax.activation:activation:1.1.1'
+    implementation 'com.github.everit-org.json-schema:org.everit.json.schema:1.9.2'
+    implementation 'com.sun.mail:javax.mail:1.6.0'
+}
+
+//test {
+//  junit:4.12 不能使用这个配置，因为gradle会自动识别junit5的测试用例
+//    useJUnitPlatform()
+//}
+
+def loadProperties(String sourceFileName) {
+    def config = new Properties()
+    def propFile = new File(sourceFileName)
+    System.err.println("Loading property file: " + propFile.absolutePath)
+    if (propFile.canRead()) {
+        config.load(new FileInputStream(propFile))
+        for (Map.Entry property in config) {
+            System.out.println("setting " + property.key)
+            project.ext[property.key] = property.value
+        }
+    }
+}
+
+loadProperties("$rootDir/local.properties")
+
+apply plugin: 'java-library'
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addStringOption('encoding', 'UTF-8')
+    options.addStringOption('charSet', 'UTF-8')
+}
+
+tasks.register('javadocJar', Jar) {
+    dependsOn javadoc
+    archiveClassifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+tasks.register('sourcesJar', Jar) {
+    dependsOn classes
+    archiveClassifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
+}
+
+apply plugin: 'maven-publish'
+publishing {
+    publications {
+        sonatype(MavenPublication) {
+            from components.java
+
+            artifact sourcesJar
+            artifact javadocJar
+
+            afterEvaluate {
+                groupId "com.rover12421.okex"
+                artifactId "sdk"
+            }
+
+            pom {
+                name        = project.name
+                description = "Copy Project / $project.name"
+                url         = 'https://shaka.rover.plus'
+                packaging   = 'jar'
+                licenses {
+                    license {
+                        name            = 'MIT License'
+                        url             = 'https://opensource.org/licenses/mit-license.php'
+                        distribution    = 'repo'
+                    }
+                }
+                scm {
+                    url                 = 'https://github.com/rover12421/okx-sdk/tree/main'
+                    connection          = 'scm:git:git://github.com/rover12421/okx-sdk.git'
+                    developerConnection = 'scm:git:git@github.com:rover12421/okx-sdk.git'
+                }
+                developers {
+                    developer {
+                        id      = 'rover12421'
+                        name    = 'Rover12421'
+                        email   = 'rover12421@163.com'
+                    }
+                }
+            }
+
+        }
+    }
+
+    repositories {
+        maven {
+            url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+            credentials {
+                username "${sonatypeUsername}"
+                password "${sonatypePassword}"
+            }
+        }
+    }
+}
+
+apply plugin: 'signing'
+signing {
+    sign publishing.publications.sonatype
+}
